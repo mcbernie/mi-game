@@ -17,7 +17,10 @@ use bevy::{
 };
 
 use bevy_rapier3d::prelude::*;
+use camera::ThirdPersonCameraPlugin;
 use player::PlayerPlugin;
+
+use crate::camera::ThirdPersonCamera;
 
 mod map;
 mod camera;
@@ -55,7 +58,8 @@ pub struct MainCamera;
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(WorldInspectorPlugin::new())
+        //.add_plugins(WorldInspectorPlugin::new())
+        .add_plugins(ThirdPersonCameraPlugin)
         .add_plugins(PlayerPlugin)
         .add_plugins((
             RapierPhysicsPlugin::<NoUserData>::default(),
@@ -87,8 +91,6 @@ struct HasRoot {
 fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
 
     /*commands.insert_resource(Animations(vec![
@@ -129,13 +131,18 @@ fn setup(
     // camera
     commands.spawn((
         Camera3dBundle {
-            transform: Transform::from_xyz(-2.5, 4.5, 9.0).looking_at(Vec3::ZERO, Vec3::Y),
+            transform: Transform::from_xyz(-2.0, 2.5, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
             tonemapping: Tonemapping::AcesFitted,
+            /*projection: Projection::Perspective(PerspectiveProjection { 
+             near:0.0,
+             far: 1000.0,
+             ..Default::default()
+            }),*/
             ..default()
         },
         //camera::CameraController::default(),
         Skybox(skybox_handle.clone()),
-        MainCamera,
+        ThirdPersonCamera::default(),
     ));
 
     commands.insert_resource(Cubemap {
@@ -144,13 +151,6 @@ fn setup(
         image_handle: skybox_handle,
     });
 
-    println!("Animation controls:");
-    println!("  - spacebar: play / pause");
-    println!("  - arrow up / down: speed up / slow down animation playback");
-    println!("  - arrow left / right: seek backward / forward");
-    println!("  - digit 1 / 3 / 5: play the animation <digit> times");
-    println!("  - L: loop the animation forever");
-    println!("  - return: change animation");
 }
 
 // Once the scene is loaded, start the animation

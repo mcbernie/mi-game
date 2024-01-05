@@ -75,7 +75,7 @@ pub fn animate(
                     } else {
                         let speed = basis_state.running_velocity.length();
                         if 0.01 < speed {
-                            AnimationState::Running(1.0 * speed)
+                            AnimationState::Running(0.4 * speed)
                         } else {
                             AnimationState::Standing
                         }
@@ -100,28 +100,28 @@ pub fn animate(
             } => match state {
                 AnimationState::Standing => {
 
-                    player.start(handler.animations["static"].clone_weak())
-                    .set_speed(1.0);
+                    //player.start(handler.animations["idle"].clone_weak())
+                    //.set_speed(1.0);
                     player
-                        .start_with_transition(handler.animations["idle"].clone_weak(), Duration::from_millis(200))
+                        .start_with_transition(handler.animations["idle"].clone_weak(), Duration::from_millis(800))
                         .set_speed(1.0)
                         .repeat();
                 }
                 AnimationState::Running(speed) => {
                     player
-                        .start(handler.animations["walk"].clone_weak())
+                        .start(handler.animations["walking"].clone_weak())
                         //.set_speed(1000.0 * (*speed))
                         .set_speed(*speed)
                         .repeat();
                 }
                 AnimationState::Jumping => {
                     player
-                        .start(handler.animations["jump"].clone_weak())
+                        .start(handler.animations["walking"].clone_weak())
                         .set_speed(2.0);
                 }
                 AnimationState::Falling => {
                     player
-                        .start(handler.animations["fall"].clone_weak())
+                        .start(handler.animations["walking"].clone_weak())
                         .set_speed(1.0);
                 }
                 AnimationState::Crouching => {

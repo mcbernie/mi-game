@@ -1,6 +1,6 @@
 
 use bevy::{
-    prelude::*, utils::HashMap, render::camera
+    prelude::*, utils::HashMap, render::camera, core_pipeline::tonemapping::Tonemapping, input::mouse::MouseMotion
 };
 //use bevy_tnua_rapier3d::*;
 use bevy_tnua::{prelude::*, TnuaProximitySensor, TnuaAnimatingState};
@@ -8,7 +8,7 @@ use bevy_rapier3d::prelude::*;
 use bevy_tnua_rapier3d::{TnuaRapier3dIOBundle, TnuaRapier3dPlugin, TnuaRapier3dSensorShape};
 use std::f32::consts::{FRAC_2_PI, PI};
 
-use crate::MainCamera;
+use crate::{MainCamera, camera::ThirdPersonCameraTarget};
 
 use self::ani_patcher::GltfSceneHandler;
 
@@ -30,7 +30,6 @@ pub struct MainPlayer;
 
 pub struct PlayerPlugin;
 
-
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app
@@ -46,8 +45,8 @@ impl Plugin for PlayerPlugin {
                 fix_character_rotation,
                 ani_patcher::animation_patcher_system,
                 animations::animate,
-            ))
-            .add_systems(Update, camera_always_follow_player);
+            ));
+            //.add_systems(Update, camera_always_follow_player);
             
     }
 }
@@ -57,22 +56,11 @@ fn fix_character_rotation(
 ) {
 
     for (_, mut t, name) in query.iter_mut() {
-        if name.as_str() == "character-digger" {
+        if name.as_str() == "Armature" {
             println!("only called once...");
-            t.rotation = Quat::from_rotation_y(PI);
+            t.rotate_y(PI);
         }
     }
-}
-
-fn camera_always_follow_player(
-    player_query: Query<&Transform, With<MainPlayer>>,
-    mut camera_query: Query<(&mut Transform, &MainCamera), Without<MainPlayer>>
-) {
-
-    let Ok(player) = player_query.get_single() else { return };
-    let Ok((mut transform,_)) = camera_query.get_single_mut() else {return};
-
-    transform.look_at(player.translation, Vec3::Y);
 }
 
 
@@ -81,22 +69,23 @@ fn setup_player(
     asset_server: Res<AssetServer>
 ) {
 
-    let mut cmd = commands.spawn_empty();
+    let mut cmd = commands.spawn(Name::new("Player1"));
     cmd.insert(SceneBundle {
-        scene: asset_server.load("character-digger.glb#Scene0"),
-        transform: Transform::from_xyz(0.0, 3.0, 0.0),
+        scene: asset_server.load("my_character.glb#Scene0"),
+        transform: Transform::from_xyz(6.0, 2012.6, 12.0),
         ..Default::default()
     });
     cmd.insert(GltfSceneHandler {
-        names_from: asset_server.load("character-digger.glb"),
+        names_from: asset_server.load("my_character.glb"),
     });
-    cmd.insert(Collider::capsule(Vec3::new(0.0,0.1,0.0), Vec3::new(0.0, 0.9, 0.0), 0.17));
-    cmd.insert(TnuaRapier3dSensorShape(Collider::capsule(Vec3::new(0.0,0.2,0.0), Vec3::new(0.0, 0.9, 0.0), 0.17)));
+    cmd.insert(Collider::capsule(Vec3::new(0.0,0.4,0.0), Vec3::new(0.0, 1.6, 0.0), 0.3));
+    //cmd.insert(TnuaRapier3dSensorShape(Collider::capsule(Vec3::new(0.0,0.0,0.0), Vec3::new(0.0, 1.6, 0.0), 0.3)));
     cmd.insert(RigidBody::Dynamic);
     cmd.insert(TnuaRapier3dIOBundle::default());
     cmd.insert(TnuaControllerBundle::default());
     cmd.insert(TnuaAnimatingState::<animations::AnimationState>::default());
     cmd.insert(MainPlayer);
+    cmd.insert(ThirdPersonCameraTarget);
 }
 
 #[allow(clippy::type_complexity)]
@@ -113,24 +102,9 @@ fn apply_controls(
         //&FallingThroughControlScheme,
         //&mut TnuaSimpleAirActionsCounter,
     )>,
+    cam_q: Query<&Transform, (With<Camera3d>, Without<MainPlayer>)>,
 ) {
 
-    let mut direction = Vec3::ZERO;
-
-    if keyboard.pressed(KeyCode::Up) {
-        direction -= Vec3::Z;
-    }
-    if keyboard.pressed(KeyCode::Down) {
-        direction += Vec3::Z;
-    }
-    if keyboard.pressed(KeyCode::Left) {
-        direction -= Vec3::X;
-    }
-    if keyboard.pressed(KeyCode::Right) {
-        direction += Vec3::X;
-    }
-
-    direction = direction.clamp_length_max(1.0);
 
     //let jump = keyboard.pressed(KeyCode::Space);
     //let dash = keyboard.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]);
@@ -152,6 +126,11 @@ fn apply_controls(
         mut air_actions_counter,*/
     ) in query.iter_mut()
     {
+
+        let cam = match cam_q.get_single() {
+            Ok(cam) => cam,
+            Err(e) => Err(format!("Error retriving camera: {}", e)).unwrap(),
+        };
         /*air_actions_counter.update(controller.as_mut());
 
         let crouch = falling_through_control_scheme.perform_and_check_if_still_crouching(
@@ -162,17 +141,32 @@ fn apply_controls(
             ghost_sensor,
             1.0,
         );*/
+        let mut direction = Vec3::ZERO;
 
-        let speed_factor = 1.0;
+        if keyboard.pressed(KeyCode::W) {
+            direction += cam.forward();
+        }
+        if keyboard.pressed(KeyCode::S) {
+            direction += cam.back();
+        }
+        if keyboard.pressed(KeyCode::A) {
+            direction += cam.left();
+        }
+        if keyboard.pressed(KeyCode::D) {
+            direction += cam.right();
+        }
+
+        direction.y = 0.0;
+        direction = direction.clamp_length_max(1.0);
+
+        let speed_factor = 3.0;
 
         controller.basis(TnuaBuiltinWalk {
-            desired_velocity: if turn_in_place {
-                Vec3::ZERO
-            } else {
-                direction * speed_factor * 1.0
-            },
-            desired_forward: direction.normalize_or_zero(),
-            float_height: 0.2,
+            desired_velocity: direction * speed_factor,
+            desired_forward: direction,
+            //desired_forward: Vec3::Y,
+            //spring_strengh: 1000.0,
+            float_height: 0.027,
             ..Default::default()
         });
 
@@ -197,6 +191,8 @@ fn apply_controls(
                 ..config.dash.clone()
             });
         }*/
+
+        // turn player by mouse position
+
     }
 }
-
