@@ -37,5 +37,16 @@ pub fn setup(
             ..Default::default()
         }
     ));
+    commands.spawn(
+        (
+            RigidBody::Fixed,
+            //Collider::halfspace(Vec3::new(0.0, 1.0, 0.0)).unwrap(),
+            Collider::cuboid(1.0, 0.01, 1.0),
+            TransformBundle {
+                local: Transform::from_xyz(6.0, 2013.0, 12.0),
+                ..Default::default()
+            },
+        )
+    );
 
 }

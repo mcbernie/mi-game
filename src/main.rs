@@ -58,7 +58,7 @@ pub struct MainCamera;
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        //.add_plugins(WorldInspectorPlugin::new())
+        .add_plugins(WorldInspectorPlugin::new())
         .add_plugins(ThirdPersonCameraPlugin)
         .add_plugins(PlayerPlugin)
         .add_plugins((
@@ -118,8 +118,8 @@ fn setup(
     // light
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
-            illuminance: 12500.0,
-            shadows_enabled: false,
+            illuminance: 1200.0,
+            shadows_enabled: true,
             ..default()
         },
         transform: Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_3)),
@@ -131,10 +131,10 @@ fn setup(
     // camera
     commands.spawn((
         Camera3dBundle {
-            transform: Transform::from_xyz(-2.0, 2.5, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
+            transform: Transform::from_xyz(-10.0, 2.5, 0.0),
             tonemapping: Tonemapping::AcesFitted,
             /*projection: Projection::Perspective(PerspectiveProjection { 
-             near:0.0,
+             near:-1.0001,
              far: 1000.0,
              ..Default::default()
             }),*/

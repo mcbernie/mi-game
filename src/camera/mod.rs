@@ -5,7 +5,7 @@ use bevy::{
 
 use std::f32::consts::PI;
 
-use crate::player;
+use crate::player::{self, MainPlayer};
 
 pub struct ThirdPersonCameraPlugin;
 
@@ -40,11 +40,11 @@ impl Default for ThirdPersonCamera {
     fn default() -> Self {
         Self {
             offset_enabled: true,
-            offset: Offset::new(0.5, -0.2),
+            offset: Offset::new(0.5, 0.2),
             zoom_enabled: true,
-            zoom: Zoom::new(4.0, 5.0),
+            zoom: Zoom::new(2.8, 5.0),
             zoom_sensitivity: 1.0,
-            focus: Vec3::new(0.0, 0.5, 0.0),
+            focus: Vec3::new(0.0, 0.1, 0.0),
             mouse_sensitivity: 4.0,
         }
     }
@@ -95,12 +95,12 @@ pub struct ThirdPersonCameraTarget;
 
 
 fn sync_player_camera(
-    player_query: Query<&Transform, With<ThirdPersonCameraTarget>>, // query all players with an ThirdPersonCameraTarget as Component
+    player_query: Query<(&Transform, &MainPlayer), With<ThirdPersonCameraTarget>>, // query all players with an ThirdPersonCameraTarget as Component
     mut camera_query: Query<(&mut ThirdPersonCamera, &mut Transform), Without<ThirdPersonCameraTarget>>, // get all ThirdPersonCameras
 ) {
 
     // get player transformation and camera with camera transformation. if one of them is missing, we return here
-    let Ok(player, ) = player_query.get_single() else { return };
+    let Ok((player, player_details), ) = player_query.get_single() else { return };
     let Ok((cam, mut cam_t)) = camera_query.get_single_mut() else { return };
 
     // get current quat rotation from the camera
@@ -119,7 +119,7 @@ fn sync_player_camera(
 
     let delta = player.translation + cam.focus;
     cam_t.translation = desired_translation + delta;
-    info!("cam_t.translation: {:?}", cam_t.translation);
+    //info!("cam_t.translation: {:?}", cam_t.translation);
 
 }
 
