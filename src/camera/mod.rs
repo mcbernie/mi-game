@@ -5,7 +5,7 @@ use bevy::{
 
 use std::f32::consts::PI;
 
-use crate::player::{self, MainPlayer};
+use crate::{player::{self, MainPlayer}, AppState};
 
 pub struct ThirdPersonCameraPlugin;
 
@@ -19,7 +19,7 @@ impl Plugin for ThirdPersonCameraPlugin {
         .add_systems(Update, (
             orbit_mouse,
             sync_player_camera.after(orbit_mouse),
-        ));
+        ).run_if(in_state(AppState::InGame)));
     }
 }
 

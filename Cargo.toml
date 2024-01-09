@@ -6,7 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy = { version = "0.12.1", default-features = false, features = [ "bevy_asset",
+bevy = { version = "0.12.1", default-features = false, features = [ 
+    "bevy_asset",
     "animation",
     "bevy_audio",
     "bevy_gilrs",
@@ -29,12 +30,13 @@ bevy = { version = "0.12.1", default-features = false, features = [ "bevy_asset"
     "tonemapping_luts",
     "default_font",
     "webgl2",
-    "dynamic_linking",
 ]}
+
 bevy-inspector-egui = "0.22.0"
 bevy-tnua = "0.14.0"
 bevy-tnua-rapier3d = "0.1.0"
 bevy_rapier3d = "0.23.0"
+iyes_progress = { version = "0.10.0", features = ["assets", "debug"] }
 
 
 # Enable a small amount of optimization in debug mode

@@ -3,6 +3,8 @@ use bevy::{
 };
 use bevy_rapier3d::{prelude::*, rapier::geometry::ColliderShape};
 
+use crate::game::GameResources;
+
 #[derive(Resource, Default)]
 pub struct MapGenerationColliderStatus {
     pub already_generated: bool,
@@ -16,19 +18,18 @@ pub struct LevelMap {
 
 pub fn setup(
     mut commands: Commands, 
-    asset_server: Res<AssetServer>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut meshes: ResMut<Assets<Mesh>>,
+    game_assets: Res<GameResources>,
+    //mut materials: ResMut<Assets<StandardMaterial>>,
+    //mut meshes: ResMut<Assets<Mesh>>,
 ) {
 
 
-    let scene: Handle<Scene> = asset_server.load("de_dust2.glb#Scene0");
 
     //let m = &meshes.get(&mesh).unwrap();
     commands.spawn((
-        RigidBody::Fixed, 
+        //RigidBody::Fixed, 
         SceneBundle {
-            scene,
+            scene: game_assets.map.clone(),
             transform: Transform::from_xyz(18.0, 0.0, -2394.0).with_scale(Vec3::new(2.0, 2.0, 2.0)),
             ..Default::default()
         }, 
@@ -39,7 +40,7 @@ pub fn setup(
     ));
     commands.spawn(
         (
-            RigidBody::Fixed,
+            //RigidBody::Fixed,
             //Collider::halfspace(Vec3::new(0.0, 1.0, 0.0)).unwrap(),
             Collider::cuboid(1.0, 0.01, 1.0),
             TransformBundle {

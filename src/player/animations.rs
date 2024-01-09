@@ -15,6 +15,15 @@ pub enum AnimationState {
     Crawling(f32),
     Dashing,
 }
+    /*cmd.insert(AudioBundle {
+        source: asset_server.load("03-footstep.ogg"),
+        settings: PlaybackSettings {
+            mode: bevy::audio::PlaybackMode::Remove,
+            spatial: true,
+            ..default()
+        },
+        ..Default::default()
+    });*/
 
 #[derive(Component)]
 struct Bla;

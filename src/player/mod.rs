@@ -8,12 +8,13 @@ use bevy_rapier3d::prelude::*;
 use bevy_tnua_rapier3d::{TnuaRapier3dIOBundle, TnuaRapier3dPlugin, TnuaRapier3dSensorShape};
 use std::f32::consts::{FRAC_2_PI, PI};
 
-use crate::{MainCamera, camera::ThirdPersonCameraTarget};
+use crate::{MainCamera, camera::ThirdPersonCameraTarget, AppState, game::GameResources};
 
 use self::ani_patcher::GltfSceneHandler;
 
 mod ani_patcher;
 mod animations;
+mod oponent;
 
 #[derive(Resource)]
 pub struct PlayerStats {
@@ -30,6 +31,14 @@ pub struct MainPlayer {
     pub head: Option<Entity>,
 }
 
+#[derive(Component)]
+pub struct Foot {
+    pub left: bool,
+    pub triggered: bool,
+}
+
+#[derive(Component)]
+pub struct Head;
 
 pub struct PlayerPlugin;
 
@@ -40,25 +49,26 @@ impl Plugin for PlayerPlugin {
                 TnuaRapier3dPlugin,
                 TnuaControllerPlugin,
             ))
-            .add_systems(Startup, (
+            .add_systems(OnEnter(AppState::GameLoading), (
                 setup_player,
             ))
-            .add_systems(Update, apply_controls.in_set(TnuaUserControlsSystemSet))
+            .add_systems(Update, (apply_controls.in_set(TnuaUserControlsSystemSet)).run_if(in_state(AppState::InGame)))
             .add_systems(Update, (
                 fix_character_rotation,
                 ani_patcher::animation_patcher_system,
                 animations::animate,
-            ))
+            ).run_if(in_state(AppState::InGame)))
             .add_systems(PostUpdate, (
-                    rotate_head_to_camera_translation.after(animation_player),
-            ));
+                    (rotate_head_to_camera_translation, foot_steps).after(animation_player),
+
+            ).run_if(in_state(AppState::InGame)));
             //.add_systems(Update, camera_always_follow_player);
             
     }
 }
 
 fn fix_character_rotation(
-    mut player_query: Query<&mut MainPlayer>,
+    //mut player_query: Query<(&mut MainPlayer, &Children)>,
     mut query: Query<(Entity, &mut Transform, &Name, &Children), Added<Name>>,
     child_query: Query<(Entity, &Name, &Children)>,
     custom_child_query: Query<(&Name, &Children)>,
@@ -66,13 +76,14 @@ fn fix_character_rotation(
 ) {
 
     fn recurse(
+        what_to_find: String,
         main_id: Entity,
         id: Entity,
         bones: &Query<(&Name, &Children)>,
     ) -> Option<Entity> {
         if let Ok((name, childs, )) = bones.get(id) {
             // safe id to faster access head
-            if *name == Name::new("mixamorig:Head") {
+            if *name == Name::new(what_to_find.clone()) {
                 //tf.scale = Vec3::ONE * 2.2;
                 println!("found bone: {:?}", name);
 
@@ -81,7 +92,7 @@ fn fix_character_rotation(
 
             for child in childs {
                 //println!("child: {:?}", child)
-                if let Some(e) = recurse(main_id, *child, bones) {
+                if let Some(e) = recurse(what_to_find.clone(), main_id, *child, bones) {
                     return Some(e)
                 }
             }
@@ -89,7 +100,8 @@ fn fix_character_rotation(
         None
     }
 
-    for (_, mut t, name, childs) in query.iter_mut() {
+    for (e, mut t, name, childs ) in query.iter_mut() {
+
         if name.as_str() == "Armature" {
             println!("only called once...");
             t.rotate_y(PI);
@@ -98,9 +110,7 @@ fn fix_character_rotation(
             for child in childs.iter() {
                 let (e, name, childs) = child_query.get(*child).unwrap();
                 if name.as_str() == "mixamorig:Hips" {
-                    if let Some(e) = recurse(e, e, &custom_child_query) {
-                        println!("found head: {:?}", e);
-                        player_query.get_single_mut().unwrap().head = Some(e);
+                    if let Some(e) = recurse("mixamorig:Head".to_string(),e, e, &custom_child_query) {
                         command.spawn(SpotLightBundle {
                             transform: Transform::from_xyz(0.0, 0.0, 0.0)
                                 .looking_at(Vec3::Z, Vec3::Y),
@@ -114,7 +124,14 @@ fn fix_character_rotation(
                             },
                             ..default()
                         }).set_parent(e);
-                        return
+                        command.entity(e).insert(Head);
+                    }
+                    if let Some(e) = recurse("mixamorig:LeftFoot".to_string(), e, e, &custom_child_query) {
+                        command.entity(e).insert(Foot{left: true, triggered: false});
+                    }
+                    if let Some(e) = recurse("mixamorig:RightFoot".to_string(), e, e, &custom_child_query) {
+                        command.entity(e).insert(Foot{left: false, triggered: false});
+
                     }
                 }
             }
@@ -125,22 +142,24 @@ fn fix_character_rotation(
 
 fn setup_player(
     mut commands: Commands, 
-    asset_server: Res<AssetServer>
+    asset_server: Res<AssetServer>,
+    game_assets: Res<GameResources>,
 ) {
 
     let mut cmd = commands.spawn(Name::new("Player1"));
     cmd.insert(SceneBundle {
-        scene: asset_server.load("my_character.glb#Scene0"),
-        transform: Transform::from_xyz(6.0, 2015.0, 12.0),
+        scene: game_assets.player_model.clone(),
+        transform: Transform::from_xyz(6.0, 2020.0, 12.0),
         ..Default::default()
     });
     cmd.insert(GltfSceneHandler {
-        names_from: asset_server.load("my_character.glb"),
+        names_from: game_assets.player.clone(),
     });
     cmd.insert(Collider::capsule_y(0.49, 0.5));
     cmd.insert(TnuaRapier3dSensorShape(Collider::cylinder(
         0.0, 0.50,
     )));
+    cmd.insert(SpatialListener::new(0.5));
     cmd.insert(RigidBody::Dynamic);
     cmd.insert(TnuaRapier3dIOBundle::default());
     cmd.insert(TnuaControllerBundle::default());
@@ -148,6 +167,37 @@ fn setup_player(
     cmd.insert(NoFrustumCulling);
     cmd.insert(MainPlayer { head: None });
     cmd.insert(ThirdPersonCameraTarget);
+
+
+    commands.spawn((
+        Name::new("Player2"),
+        TransformBundle {
+            local: Transform::from_xyz(4.0, 2014.0, 11.0), 
+            ..Default::default()
+        },
+        VisibilityBundle {
+            visibility: Visibility::Visible,
+            ..Default::default()
+        },
+        NoFrustumCulling,
+        game_assets.player_model.clone(),
+        GltfSceneHandler {
+            names_from: game_assets.player.clone(),
+        },
+        TnuaRapier3dSensorShape(Collider::cylinder(
+            0.0, 0.50,
+        )),
+        Collider::capsule_y(0.49, 0.5),
+        RigidBody::Dynamic,
+        //GravityScale(2.5),
+        //ColliderMassProperties::Density(2.0),
+        //Sensor,
+        //Velocity { linvel: Vec3::new(0.0, -0.5, 0.0), angvel: Vec3::new(0.0, 0.0, 0.0) },
+        //TnuaRapier3dIOBundle::default(),
+        //TnuaControllerBundle::default(),
+        //TnuaAnimatingState::<animations::AnimationState>::default(),
+    ));
+    //cmd.insert(Emitter::default());
 }
 
 #[allow(clippy::type_complexity)]
@@ -266,7 +316,37 @@ fn apply_controls(
     }
 }
 
-
+fn foot_steps(
+    mut command: Commands,
+    query: Query<&GlobalTransform, With<MainPlayer>>,
+    mut steps_query: Query<(Entity, &GlobalTransform, &mut Foot)>,
+    asset_server: Res<AssetServer>,
+) {
+    let global_transform = query.get_single().unwrap();
+    let player_transform = global_transform.compute_transform();
+    for (foot_entity, t, mut f) in steps_query.iter_mut() {
+        let foot_transform = t.compute_transform();
+        let foot_distance = player_transform.translation.distance(foot_transform.translation);
+        if foot_distance > 0.88 {
+            if f.triggered == false {
+                command.entity(foot_entity).insert(
+                AudioBundle {
+                    source: asset_server.load("02-footstep.ogg"),
+                    settings: PlaybackSettings {
+                        mode: bevy::audio::PlaybackMode::Remove,
+                        spatial: true,
+                        ..default()
+                    },
+                    ..Default::default()
+                });
+                f.triggered = true;
+            }
+        } else {
+            f.triggered = false;
+            //println!("foot up");
+        }
+    }
+}
 
 fn rotate_head_to_camera_translation(
     query: Query<(&MainPlayer, &Transform), With<ThirdPersonCameraTarget>>,
