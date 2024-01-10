@@ -24,7 +24,7 @@ impl Plugin for GamePlugin {
             .add_plugins(PlayerPlugin)
             .add_plugins((
                 RapierPhysicsPlugin::<NoUserData>::default(),
-                RapierDebugRenderPlugin::default(),
+                //RapierDebugRenderPlugin::default(),
             ))
             //.add_systems(OnEnter(AppState::GameLoading), setup)
             .add_systems(

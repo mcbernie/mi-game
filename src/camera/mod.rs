@@ -1,6 +1,6 @@
 use bevy::{
     input::mouse::{MouseMotion, self},
-    prelude::*, window::PrimaryWindow,
+    prelude::*, window::{PrimaryWindow, CursorGrabMode},
 };
 
 use std::f32::consts::PI;
@@ -17,8 +17,9 @@ impl Plugin for ThirdPersonCameraPlugin {
         .register_type::<ThirdPersonCamera>()
         .register_type::<ThirdPersonCameraTarget>()
         .add_systems(Update, (
-            orbit_mouse,
+            orbit_mouse.run_if(orbit_condition),
             sync_player_camera.after(orbit_mouse),
+            toggle_cursor,
         ).run_if(in_state(AppState::InGame)));
     }
 }
@@ -33,6 +34,7 @@ pub struct ThirdPersonCamera {
     pub zoom_sensitivity: f32,
     pub focus: Vec3,
     pub mouse_sensitivity: f32,
+    pub snap_mouse: bool,
 }
 
 
@@ -42,10 +44,11 @@ impl Default for ThirdPersonCamera {
             offset_enabled: true,
             offset: Offset::new(0.5, 0.2),
             zoom_enabled: true,
-            zoom: Zoom::new(2.8, 5.0),
+            zoom: Zoom::new(2.0, 3.0),
             zoom_sensitivity: 1.0,
-            focus: Vec3::new(0.0, 0.1, 0.0),
+            focus: Vec3::new(0.0, 0.3, -0.1),
             mouse_sensitivity: 4.0,
+            snap_mouse: false,
         }
     }
 }
@@ -168,4 +171,36 @@ pub fn orbit_mouse(
     let rot_matrix = Mat3::from_quat(cam_transform.rotation);
     cam_transform.translation =
         cam.focus + rot_matrix.mul_vec3(Vec3::new(0.0, 0.0, cam.zoom.radius));
+}
+
+fn toggle_cursor(
+    mut cam_q: Query<&mut ThirdPersonCamera>,
+    keys: Res<Input<KeyCode>>,
+    mut window_q: Query<&mut Window, With<PrimaryWindow>>,
+) {
+    let Ok(mut cam) = cam_q.get_single_mut() else { return };
+
+    if keys.just_pressed(KeyCode::Escape) {
+        cam.snap_mouse = !cam.snap_mouse;
+    }
+
+    let mut window = window_q.get_single_mut().unwrap();
+    if cam.snap_mouse {
+        window.cursor.grab_mode = CursorGrabMode::Locked;
+        window.cursor.visible = false;
+    } else {
+        window.cursor.grab_mode = CursorGrabMode::None;
+        window.cursor.visible = true;
+    }
+}
+
+//fn toggle_cursor_condition(cam_q: Query<&ThirdPersonCamera>) -> bool {
+//    let Ok(cam) = cam_q.get_single() else { return true };
+//    cam.snap_mouse
+//}
+
+// only run the orbit system if the cursor lock is disabled
+fn orbit_condition(cam_q: Query<&ThirdPersonCamera>) -> bool {
+    let Ok(cam) = cam_q.get_single() else { return true };
+    return cam.snap_mouse;
 }

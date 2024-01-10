@@ -1,6 +1,6 @@
 
 use bevy::{
-    prelude::*, utils::HashMap, render::{camera, view::NoFrustumCulling}, core_pipeline::tonemapping::Tonemapping, input::mouse::MouseMotion, transform::TransformSystem, animation::animation_player
+    prelude::*, utils::HashMap, render::{camera, view::NoFrustumCulling, primitives::Aabb}, core_pipeline::tonemapping::Tonemapping, input::mouse::MouseMotion, transform::TransformSystem, animation::animation_player, math::Vec3A
 };
 //use bevy_tnua_rapier3d::*;
 use bevy_tnua::{prelude::*, TnuaProximitySensor, TnuaAnimatingState};
@@ -27,14 +27,19 @@ pub struct PlayerStats {
 }
 
 #[derive(Component)]
-pub struct MainPlayer {
+pub struct MainPlayer;
+
+#[derive(Component, Default)]
+pub struct Player {
     pub head: Option<Entity>,
 }
+
 
 #[derive(Component)]
 pub struct Foot {
     pub left: bool,
     pub triggered: bool,
+    pub body: Entity,
 }
 
 #[derive(Component)]
@@ -68,10 +73,12 @@ impl Plugin for PlayerPlugin {
 }
 
 fn fix_character_rotation(
-    //mut player_query: Query<(&mut MainPlayer, &Children)>,
-    mut query: Query<(Entity, &mut Transform, &Name, &Children), Added<Name>>,
+    mut player_query: Query<(Entity, &Children, &Name, &mut Player), Added<Player>>,
+    player_child_query_first: Query<(Entity, &Children)>,
+    mut amature_query: Query<(Entity, &mut Transform, &Name, &Children)>,
     child_query: Query<(Entity, &Name, &Children)>,
-    custom_child_query: Query<(&Name, &Children)>,
+    custom_child_query: Query<(&Name, Option<&Children>)>,
+    mut fix_aabb_query: Query<&mut Aabb>,
     mut command: Commands,
 ) {
 
@@ -79,70 +86,102 @@ fn fix_character_rotation(
         what_to_find: String,
         main_id: Entity,
         id: Entity,
-        bones: &Query<(&Name, &Children)>,
+        bones: &Query<(&Name, Option<&Children>)>,
     ) -> Option<Entity> {
         if let Ok((name, childs, )) = bones.get(id) {
-            // safe id to faster access head
             if *name == Name::new(what_to_find.clone()) {
-                //tf.scale = Vec3::ONE * 2.2;
-                println!("found bone: {:?}", name);
-
                 return Some(id);
             }
-
-            for child in childs {
-                //println!("child: {:?}", child)
-                if let Some(e) = recurse(what_to_find.clone(), main_id, *child, bones) {
-                    return Some(e)
+            if let Some(childs) = childs {
+                for child in childs {
+                    if let Some(e) = recurse(what_to_find.clone(), main_id, *child, bones) {
+                        return Some(e)
+                    }
                 }
             }
         }
         None
     }
 
-    for (e, mut t, name, childs ) in query.iter_mut() {
+    // query all players and try to get children
+    for (player_body_entity, player_childs, player_name, mut player) in player_query.iter_mut() {
 
-        if name.as_str() == "Armature" {
-            println!("only called once...");
-            t.rotate_y(PI);
-            println!("current_y: {}", t.translation.y);
-            t.translation.y = -1.0;
-            for child in childs.iter() {
-                let (e, name, childs) = child_query.get(*child).unwrap();
-                if name.as_str() == "mixamorig:Hips" {
-                    if let Some(e) = recurse("mixamorig:Head".to_string(),e, e, &custom_child_query) {
-                        command.spawn(SpotLightBundle {
-                            transform: Transform::from_xyz(0.0, 0.0, 0.0)
-                                .looking_at(Vec3::Z, Vec3::Y),
-                            spot_light: SpotLight {
-                                intensity: 400.0, // lumens
-                                color: Color::WHITE,
-                                shadows_enabled: true,
-                                inner_angle: 0.1,
-                                outer_angle: 0.5,
-                                ..default()
-                            },
-                            ..default()
-                        }).set_parent(e);
-                        command.entity(e).insert(Head);
-                    }
-                    if let Some(e) = recurse("mixamorig:LeftFoot".to_string(), e, e, &custom_child_query) {
-                        command.entity(e).insert(Foot{left: true, triggered: false});
-                    }
-                    if let Some(e) = recurse("mixamorig:RightFoot".to_string(), e, e, &custom_child_query) {
-                        command.entity(e).insert(Foot{left: false, triggered: false});
+        // got one Child without Name..
+        for player_first_child in player_childs {
+            let Ok((_, childs_in_sub)) = player_child_query_first.get(*player_first_child) else { continue };
+            for player_child in childs_in_sub {
 
+                if let Ok((_, mut t, name, childs)) = amature_query.get_mut(*player_child) {
+
+                    if name.as_str() == "Armature" {
+                        t.rotate_y(PI);
+                        t.translation.y = -1.0;
+                        for child in childs.iter() {
+                            let (e, name, _) = child_query.get(*child).unwrap();
+                            if name.as_str() == "mixamorig:Hips" {
+                                if let Some(e) = recurse("mixamorig:Head".to_string(),e, e, &custom_child_query) {
+                                    command.spawn(SpotLightBundle {
+                                        transform: Transform::from_xyz(0.0, 0.0, 0.0)
+                                            .looking_at(Vec3::Z, Vec3::Y),
+                                        spot_light: SpotLight {
+                                            intensity: 400.0, // lumens
+                                            color: Color::WHITE,
+                                            shadows_enabled: true,
+                                            inner_angle: 0.1,
+                                            outer_angle: 0.5,
+                                            ..default()
+                                        },
+                                        ..default()
+                                    }).set_parent(e);
+                                    command.entity(e).insert(Head);
+                                    player.head = Some(e);
+                                }
+                                if let Some(e) = recurse("mixamorig:LeftFoot".to_string(), e, e, &custom_child_query) {
+                                    command.entity(e).insert(Foot{left: true, triggered: false, body: player_body_entity });
+                                }
+                                if let Some(e) = recurse("mixamorig:RightFoot".to_string(), e, e, &custom_child_query) {
+                                    command.entity(e).insert(Foot{left: false, triggered: false, body: player_body_entity});
+                                }
+                            }
+                            if name.as_str() == "Soldier_body" {
+                                if let Some(e) = recurse("Soldier_body.001".to_string(), e, e, &custom_child_query) {
+                                    if let Ok(mut aabb) = fix_aabb_query.get_mut(e) {
+                                        aabb.center = Vec3A::new(0.0, 4.0, -80.0);
+                                        aabb.half_extents = Vec3A::new(38.0, 46.0, 83.0);
+                                    }
+                                }
+                            }
+                            if name.as_str() == "Soldier_head" {
+                                if let Some(e) = recurse("Soldier_head.001.0".to_string(), e, e, &custom_child_query) {
+                                    if let Ok(mut aabb) = fix_aabb_query.get_mut(e) {
+                                        aabb.center = Vec3A::new(0.0, -3.0, -166.0);
+                                        aabb.half_extents = Vec3A::new(5.0, 5.0, 5.0);
+                                        //aabb.half_extents = Vec3A::new(12.0, 9.0, 10.0);
+                                    }
+                                }
+                                if let Some(e) = recurse("Soldier_head.001.1".to_string(), e, e, &custom_child_query) {
+                                    if let Ok(mut aabb) = fix_aabb_query.get_mut(e) {
+                                        //aabb.center = Vec3A::new(0.0, 3.0, -166.0);
+                                        //aabb.half_extents = Vec3A::new(20.0, 21.0, 20.0);
+                                        aabb.center = Vec3A::new(0.0, -3.0, -166.0);
+                                        aabb.half_extents = Vec3A::new(5.0, 5.0,5.0);
+                                        //aabb.half_extents = Vec3A::new(12.0, 9.0, 10.0);
+                                    }
+                                }
+
+                            }
+                        }
                     }
                 }
             }
         }
+
     }
 }
 
 
 fn setup_player(
     mut commands: Commands, 
-    asset_server: Res<AssetServer>,
     game_assets: Res<GameResources>,
 ) {
 
@@ -155,7 +194,7 @@ fn setup_player(
     cmd.insert(GltfSceneHandler {
         names_from: game_assets.player.clone(),
     });
-    cmd.insert(Collider::capsule_y(0.49, 0.5));
+    cmd.insert(Collider::capsule_y(0.3, 0.4));
     cmd.insert(TnuaRapier3dSensorShape(Collider::cylinder(
         0.0, 0.50,
     )));
@@ -165,12 +204,14 @@ fn setup_player(
     cmd.insert(TnuaControllerBundle::default());
     cmd.insert(TnuaAnimatingState::<animations::AnimationState>::default());
     cmd.insert(NoFrustumCulling);
-    cmd.insert(MainPlayer { head: None });
+    cmd.insert(MainPlayer);
+    cmd.insert(Player::default());
     cmd.insert(ThirdPersonCameraTarget);
 
 
     commands.spawn((
         Name::new("Player2"),
+        Player::default(),
         TransformBundle {
             local: Transform::from_xyz(4.0, 2014.0, 11.0), 
             ..Default::default()
@@ -187,7 +228,7 @@ fn setup_player(
         TnuaRapier3dSensorShape(Collider::cylinder(
             0.0, 0.50,
         )),
-        Collider::capsule_y(0.49, 0.5),
+        Collider::capsule_y(0.49, 0.3),
         RigidBody::Dynamic,
         //GravityScale(2.5),
         //ColliderMassProperties::Density(2.0),
@@ -285,7 +326,7 @@ fn apply_controls(
             desired_forward: direction,
             //desired_forward: Vec3::Y,
             spring_strengh: 2000.0,
-            float_height: 1.10,
+            float_height: 0.99,
             ..Default::default()
         });
 
@@ -318,13 +359,14 @@ fn apply_controls(
 
 fn foot_steps(
     mut command: Commands,
-    query: Query<&GlobalTransform, With<MainPlayer>>,
     mut steps_query: Query<(Entity, &GlobalTransform, &mut Foot)>,
+    query_root_body: Query<&GlobalTransform, With<Player>>,
     asset_server: Res<AssetServer>,
 ) {
-    let global_transform = query.get_single().unwrap();
-    let player_transform = global_transform.compute_transform();
     for (foot_entity, t, mut f) in steps_query.iter_mut() {
+        let player = query_root_body.get(f.body).unwrap();
+        let player_transform = player.compute_transform();
+
         let foot_transform = t.compute_transform();
         let foot_distance = player_transform.translation.distance(foot_transform.translation);
         if foot_distance > 0.88 {
@@ -349,16 +391,16 @@ fn foot_steps(
 }
 
 fn rotate_head_to_camera_translation(
-    query: Query<(&MainPlayer, &Transform), With<ThirdPersonCameraTarget>>,
-    cam_q: Query<&Transform, (With<Camera3d>, Without<MainPlayer>)>,
-    mut head_q: Query<&mut Transform, (Without<Camera3d>, Without<ThirdPersonCameraTarget>)>,
+    query_a_player: Query<(&Player, &Transform), With<MainPlayer>>,
+    cam_q: Query<&Transform, With<Camera3d>>,
+    mut head_q: Query<&mut Transform, (With<Head>, Without<Camera3d>, Without<MainPlayer>)>,
 ) {
     let camera = match cam_q.get_single() {
         Ok(cam) => cam,
         Err(e) => Err(format!("Error retriving camera: {}", e)).unwrap(),
     };
 
-    let (config, p_transform) = query.get_single().unwrap();
+    let (config, p_transform) = query_a_player.get_single().unwrap();
     if let Some(head) = config.head {
         let mut get_head = head_q.get_mut(head).unwrap(); 
         //get_head.rotation = camera.rotation;

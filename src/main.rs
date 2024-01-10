@@ -49,13 +49,13 @@ fn main() {
         .add_plugins(splash::SplashPlugin)
         .add_plugins(game::GamePlugin)
         .add_systems(Startup, setup)
-        /*.insert_resource(GizmoConfig {
-            aabb: AabbGizmoConfig {
-                draw_all: true,
-                default_color: Some(Color::DARK_GREEN),
-            },
-            ..Default::default()
-        })*/
+        //.insert_resource(GizmoConfig {
+        //    aabb: AabbGizmoConfig {
+        //        draw_all: true,
+        //        default_color: Some(Color::DARK_GREEN),
+        //    },
+        //    ..Default::default()
+        //})
         /*.add_systems(Update, (
             //asset_loaded,
             //setup_scene_once_loaded, 
