@@ -50,6 +50,17 @@ pub fn setup(
         )
     );
     commands.spawn(
+        (
+            //RigidBody::Fixed,
+            //Collider::halfspace(Vec3::new(0.0, 1.0, 0.0)).unwrap(),
+            Collider::cuboid(1.0, 0.01, 1.0),
+            TransformBundle {
+                local: Transform::from_xyz(4.0, 2013.0, 11.0),
+                ..Default::default()
+            },
+        )
+    );
+    commands.spawn(
         PointLightBundle {
             transform: Transform::from_xyz(26.0, 2012.57, 3.723),
             point_light: PointLight {

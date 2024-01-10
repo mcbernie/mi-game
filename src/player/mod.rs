@@ -2,13 +2,14 @@
 use bevy::{
     prelude::*, utils::HashMap, render::{camera, view::NoFrustumCulling, primitives::Aabb}, core_pipeline::tonemapping::Tonemapping, input::mouse::MouseMotion, transform::TransformSystem, animation::animation_player, math::Vec3A
 };
+use bevy_ggrs::*;
 //use bevy_tnua_rapier3d::*;
 use bevy_tnua::{prelude::*, TnuaProximitySensor, TnuaAnimatingState};
 use bevy_rapier3d::prelude::*;
 use bevy_tnua_rapier3d::{TnuaRapier3dIOBundle, TnuaRapier3dPlugin, TnuaRapier3dSensorShape};
 use std::f32::consts::{FRAC_2_PI, PI};
 
-use crate::{MainCamera, camera::ThirdPersonCameraTarget, AppState, game::GameResources};
+use crate::{MainCamera, camera::{ThirdPersonCameraTarget, PlayerCamera}, AppState, game::{GameResources, INPUT_UP, INPUT_DOWN, INPUT_LEFT, INPUT_RIGHT, INPUT_RUN, Config}};
 
 use self::ani_patcher::GltfSceneHandler;
 
@@ -31,7 +32,10 @@ pub struct MainPlayer;
 
 #[derive(Component, Default)]
 pub struct Player {
+    pub camera: Option<Entity>,
+    pub handle: usize,
     pub head: Option<Entity>,
+    pub head_rotation: Quat,
 }
 
 
@@ -57,9 +61,13 @@ impl Plugin for PlayerPlugin {
             .add_systems(OnEnter(AppState::GameLoading), (
                 setup_player,
             ))
-            .add_systems(Update, (apply_controls.in_set(TnuaUserControlsSystemSet)).run_if(in_state(AppState::InGame)))
+            .add_systems(GgrsSchedule, (
+                    (apply_controls).in_set(TnuaUserControlsSystemSet),
+                ).run_if(in_state(AppState::InGame)
+            ))
             .add_systems(Update, (
                 fix_character_rotation,
+                setup_camera_to_local_player,
                 ani_patcher::animation_patcher_system,
                 animations::animate,
             ).run_if(in_state(AppState::InGame)))
@@ -106,6 +114,7 @@ fn fix_character_rotation(
     // query all players and try to get children
     for (player_body_entity, player_childs, player_name, mut player) in player_query.iter_mut() {
 
+        info!("run fix on player: {} with handle {}", player_name.as_str(), player.handle);
         // got one Child without Name..
         for player_first_child in player_childs {
             let Ok((_, childs_in_sub)) = player_child_query_first.get(*player_first_child) else { continue };
@@ -180,6 +189,41 @@ fn fix_character_rotation(
     }
 }
 
+fn setup_camera_to_local_player(
+    mut commands: Commands,
+    local_players: Res<LocalPlayers>,
+    query: Query<(Entity, &Player), Without<MainPlayer>>,
+) {
+
+    if local_players.0.len() == 0 {
+        return;
+    }
+
+    for (e, player) in query.iter() {
+
+        if player.handle == local_players.0[0] {
+            commands.entity(e).insert(MainPlayer);
+            commands.entity(e).insert(ThirdPersonCameraTarget);
+        }
+        
+    }
+}
+
+fn setup_player_cameras(
+    mut commands: Commands,
+    mut query_players: Query<(Entity, &mut Player), Added<Player>>,
+) {
+    
+        for (e, mut player) in query_players.iter_mut() {
+            commands.spawn((
+                Name::new("PlayerCamera"),
+                TransformBundle::default(),
+                PlayerCamera { player: e },
+                //ThirdPersonCamera::default(),
+            )).add_rollback();
+            player.camera = Some(e);
+        }
+}
 
 fn setup_player(
     mut commands: Commands, 
@@ -204,23 +248,27 @@ fn setup_player(
     cmd.insert(TnuaRapier3dIOBundle::default());
     cmd.insert(TnuaControllerBundle::default());
     cmd.insert(TnuaAnimatingState::<animations::AnimationState>::default());
-    cmd.insert(MainPlayer);
-    cmd.insert(Player::default());
     cmd.insert(ThirdPersonCameraTarget);
+    cmd.insert(Player {
+        handle: 0,
+        ..Default::default()
+    });
 
+    //cmd.insert(MainPlayer);
+    //cmd.insert(ThirdPersonCameraTarget);
+
+    cmd.add_rollback();
 
     commands.spawn((
         Name::new("Player2"),
-        Player::default(),
+        Player{
+            handle: 1,
+            ..Default::default()
+        },
         TransformBundle {
-            local: Transform::from_xyz(4.0, 2014.0, 11.0), 
+            local: Transform::from_xyz(4.0, 2020.0, 11.0), 
             ..Default::default()
         },
-        VisibilityBundle {
-            visibility: Visibility::Visible,
-            ..Default::default()
-        },
-        NoFrustumCulling,
         game_assets.player_model.clone(),
         GltfSceneHandler {
             names_from: game_assets.player.clone(),
@@ -230,23 +278,23 @@ fn setup_player(
         )),
         Collider::capsule_y(0.49, 0.3),
         RigidBody::Dynamic,
-        //GravityScale(2.5),
-        //ColliderMassProperties::Density(2.0),
-        //Sensor,
-        //Velocity { linvel: Vec3::new(0.0, -0.5, 0.0), angvel: Vec3::new(0.0, 0.0, 0.0) },
+        VisibilityBundle::default(),
+        ThirdPersonCameraTarget,
         TnuaRapier3dIOBundle::default(),
         TnuaControllerBundle::default(),
         TnuaAnimatingState::<animations::AnimationState>::default(),
-    ));
+    )).add_rollback();
+
     //cmd.insert(Emitter::default());
 }
 
 #[allow(clippy::type_complexity)]
 fn apply_controls(
     //mut egui_context: EguiContexts,
-    keyboard: Res<Input<KeyCode>>,
+    //keyboard: Res<Input<KeyCode>>,
+    inputs: Res<PlayerInputs<Config>>,
     mut query: Query<(
-        &MainPlayer,
+        &mut Player,
         //&CharacterMotionConfigForPlatformerExample,
         &mut TnuaController,
         //&mut TnuaCrouchEnforcer,
@@ -255,23 +303,22 @@ fn apply_controls(
         //&mut TnuaSimpleFallThroughPlatformsHelper,
         //&FallingThroughControlScheme,
         //&mut TnuaSimpleAirActionsCounter,
+        Option<&MainPlayer>,
     )>,
-    cam_q: Query<&Transform, (With<Camera3d>, Without<MainPlayer>)>,
-    mut head_query: Query<&mut Transform, Without<Camera3d>>, // get all heads
+    cam_q: Query<&Transform, (With<PlayerCamera>, Without<Player>, Without<Head>)>,
+    //mut query_heads: Query<&mut Transform, (With<Head>, Without<MainPlayer>, Without<Player>)>,
 ) {
 
 
     //let jump = keyboard.pressed(KeyCode::Space);
     //let dash = keyboard.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]);
 
-    let turn_in_place = keyboard.any_pressed([KeyCode::AltLeft, KeyCode::AltRight]);
-
     //let crouch_buttons = [KeyCode::ControlLeft, KeyCode::ControlRight];
     //let crouch = keyboard.any_pressed(crouch_buttons);
     //let crouch_just_pressed = keyboard.any_just_pressed(crouch_buttons);
 
     for (
-        config,
+        mut config,
         //config,
         mut controller,
         //mut crouch_enforcer,
@@ -280,10 +327,16 @@ fn apply_controls(
         mut fall_through_helper,
         falling_through_control_scheme,
         mut air_actions_counter,*/
+        main_player,
     ) in query.iter_mut()
     {
 
-        let cam = match cam_q.get_single() {
+        if config.camera.is_none() {
+            warn!("no camera found for player: {}", config.handle);
+            continue;
+        }
+
+        let cam = match cam_q.get(config.camera.unwrap()) {
             Ok(cam) => cam,
             Err(e) => Err(format!("Error retriving camera: {}", e)).unwrap(),
         };
@@ -299,23 +352,26 @@ fn apply_controls(
         );*/
         let mut direction = Vec3::ZERO;
 
-        if keyboard.pressed(KeyCode::W) {
+        let (state, _) = inputs[config.handle];
+
+        let input = state.input;
+        if input & INPUT_UP != 0  {
             direction += cam.forward();
         }
-        if keyboard.pressed(KeyCode::S) {
+        if input & INPUT_DOWN != 0 {
             direction += cam.back();
         }
-        if keyboard.pressed(KeyCode::A) {
+        if input & INPUT_LEFT != 0 {
             direction += cam.left();
         }
-        if keyboard.pressed(KeyCode::D) {
+        if input & INPUT_RIGHT != 0 {
             direction += cam.right();
         }
 
         direction.y = 0.0;
         direction = direction.clamp_length_max(1.0);
 
-        let speed_factor = if keyboard.pressed(KeyCode::ShiftLeft) {
+        let speed_factor = if input & INPUT_RUN != 0 {
             6.0
         } else {
             3.0
@@ -353,6 +409,22 @@ fn apply_controls(
         }*/
 
         // turn player by mouse position
+        // if this is not a main player...
+        if main_player.is_none() {
+            let (state, _) = inputs[config.handle];
+            //if let Some(head) = config.head {
+            //    if let Ok(mut get_head) = query_heads.get_mut(head) { 
+            //        let r = Quat {
+            //            x: state.head_rotation.x,
+            //            y: state.head_rotation.y,
+            //            z: state.head_rotation.z,
+            //            w: state.w,
+            //        };
+            //        get_head.rotation = r;
+            //        get_head.scale = Vec3::ONE * 2.2;
+            //    }
+            //} 
+        }
 
     }
 }
@@ -391,61 +463,53 @@ fn foot_steps(
 }
 
 fn rotate_head_to_camera_translation(
-    query_a_player: Query<(&Player, &Transform), With<MainPlayer>>,
-    cam_q: Query<&Transform, With<Camera3d>>,
-    mut head_q: Query<&mut Transform, (With<Head>, Without<Camera3d>, Without<MainPlayer>)>,
+    query_a_player: Query<(&Player, &Transform, Option<&MainPlayer>), With<Player>>,
+    cam_q: Query<&Transform, With<PlayerCamera>>,
+    mut head_q: Query<&mut Transform, (With<Head>, Without<PlayerCamera>, Without<Player>)>,
 ) {
-    let camera = match cam_q.get_single() {
-        Ok(cam) => cam,
-        Err(e) => Err(format!("Error retriving camera: {}", e)).unwrap(),
-    };
 
-    let (config, p_transform) = query_a_player.get_single().unwrap();
-    if let Some(head) = config.head {
-        let mut get_head = head_q.get_mut(head).unwrap(); 
-        //get_head.rotation = camera.rotation;
-        //get_head.look_at(camera.translation, Vec3::Y);
-        let forward = Vec3::new(0.0, 0.0, -1.0);
-        let camera_direction = camera.rotation.mul_vec3(forward);
-        get_head.look_to(camera_direction, Vec3::Y);
-        get_head.rotation = Quat{x:get_head.rotation.x, y:-get_head.rotation.y, z: get_head.rotation.z, w: -get_head.rotation.w};
-    
-        // Umwandeln in Euler-Winkel, Roll ignorieren und Einschränkungen anwenden
-        let mut euler = get_head.rotation.to_euler(EulerRot::XYZ);
-        //euler.2 = 0.0; // Roll auf Null setzen
-        //println!("euler: {:?}", euler.1);
-        //euler.0 = euler.0.clamp(-0.2, 0.2); // Pitch (X-Achse) einschränken (oben, unten)
-        //euler.1 = euler.1.clamp(-0.2, 0.2); // Yaw (Y-Achse) einschränken (links, rechts)
-        //euler.2 += 0.5;
-        //euler.1 = -euler.1;
-    
-        // Zielrotation ohne Roll und mit eingeschränktem Pitch/Yaw
-        let target_rotation = Quat::from_euler(EulerRot::XYZ, euler.0, euler.1, euler.2);
-    
-        // Slerp-Interpolation anwenden
-        let t: f32 = 0.1; // Interpolationsfaktor
-        //get_head.rotation = get_head.rotation.slerp(target_rotation, t.clamp(0.0, 1.0));
-        get_head.rotation = target_rotation;
-    
-        // Anwenden der inversen Spielerrotation, um die Weltrotation zu berücksichtigen
-        get_head.rotation = p_transform.rotation.inverse() * get_head.rotation;
-        get_head.scale = Vec3::ONE * 2.2;
-    }
-}
+    for (config, p_transform, main_player) in query_a_player.iter() {
+        if config.camera.is_none() {
+            warn!("in rotate head, no camera for player is found");
+            continue;
+        }
 
-// Funktion, um einen Punkt innerhalb eines kegelförmigen Bereichs zu beschränken
-fn clamp_to_cone(origin: Vec3, target: Vec3, forward: Vec3, max_angle: f32) -> Vec3 {
-    let direction_to_target = (target - origin).normalize();
+        let camera = match cam_q.get(config.camera.unwrap()) {
+            Ok(cam) => cam,
+            Err(e) => Err(format!("Error retriving camera: {}", e)).unwrap(),
+        };
 
-    // Winkel zwischen dem Vorwärtsvektor und der Richtung zum Ziel
-    let angle_to_target = forward.angle_between(direction_to_target);
+        if let Some(head) = config.head {
 
-    if angle_to_target > max_angle {
-        // Berechnen eines neuen Zielpunktes auf dem Rand des Kegels
-        let rotation_to_max_angle = Quat::from_axis_angle(forward.cross(direction_to_target).normalize(), max_angle);
-        rotation_to_max_angle.mul_vec3(forward) * (target - origin).length() + origin
-    } else {
-        // Zielpunkt liegt bereits innerhalb des Kegels
-        target
+            let Ok(mut get_head) = head_q.get_mut(head) else { continue };
+
+            //get_head.rotation = camera.rotation;
+            //get_head.look_at(camera.translation, Vec3::Y);
+            let forward = Vec3::new(0.0, 0.0, -1.0);
+            let camera_direction = camera.rotation.mul_vec3(forward);
+            get_head.look_to(camera_direction, Vec3::Y);
+            get_head.rotation = Quat{x:get_head.rotation.x, y:-get_head.rotation.y, z: get_head.rotation.z, w: -get_head.rotation.w};
+        
+            // Umwandeln in Euler-Winkel, Roll ignorieren und Einschränkungen anwenden
+            let euler = get_head.rotation.to_euler(EulerRot::XYZ);
+            //euler.2 = 0.0; // Roll auf Null setzen
+            //println!("euler: {:?}", euler.1);
+            //euler.0 = euler.0.clamp(-0.2, 0.2); // Pitch (X-Achse) einschränken (oben, unten)
+            //euler.1 = euler.1.clamp(-0.2, 0.2); // Yaw (Y-Achse) einschränken (links, rechts)
+            //euler.2 += 0.5;
+            //euler.1 = -euler.1;
+        
+            // Zielrotation ohne Roll und mit eingeschränktem Pitch/Yaw
+            let target_rotation = Quat::from_euler(EulerRot::XYZ, euler.0, euler.1, euler.2);
+        
+            // Slerp-Interpolation anwenden
+            //let t: f32 = 0.1; // Interpolationsfaktor
+            //get_head.rotation = get_head.rotation.slerp(target_rotation, t.clamp(0.0, 1.0));
+            get_head.rotation = target_rotation;
+        
+            // Anwenden der inversen Spielerrotation, um die Weltrotation zu berücksichtigen
+            get_head.rotation = p_transform.rotation.inverse() * get_head.rotation;
+            get_head.scale = Vec3::ONE * 2.2;
+        }
     }
 }

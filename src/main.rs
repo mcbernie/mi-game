@@ -26,15 +26,23 @@ pub struct MainCamera;
 enum AppState {
     #[default]
     Splash,
-    MainMenu,
+    //MainMenu,
     GameLoading,
     InGame,
 }
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
-        //.add_plugins(WorldInspectorPlugin::new())
+        .add_plugins(DefaultPlugins.set(
+            WindowPlugin {
+                primary_window: Some(Window {
+                    fit_canvas_to_parent: true,
+                    ..default()
+                }),
+                ..default()
+            }
+        ))
+        .add_plugins(WorldInspectorPlugin::new())
         .add_state::<AppState>()
         .add_plugins(
             ProgressPlugin::new(AppState::Splash)
@@ -56,14 +64,6 @@ fn main() {
         //    },
         //    ..Default::default()
         //})
-        /*.add_systems(Update, (
-            //asset_loaded,
-            //setup_scene_once_loaded, 
-            //keyboard_animation_control, 
-            //set_head_size, 
-            //get_current_position_of_root,
-            /*camera::camera_controller,*/
-        ))*/
         .run();
 }
 
@@ -76,12 +76,10 @@ struct Player;
 
 fn setup(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
 ) {
-
-    commands.spawn((
+    commands.spawn(
         Camera2dBundle::default()
-    ));
+    );
 }
 
 

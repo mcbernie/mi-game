@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bytemuck = { version = "1.7", features = ["derive"] }
 bevy = { version = "0.12.1", default-features = false, features = [ 
     "bevy_asset",
     "animation",
@@ -37,7 +38,11 @@ bevy-tnua = "0.14.0"
 bevy-tnua-rapier3d = "0.1.0"
 bevy_rapier3d = "0.23.0"
 iyes_progress = { version = "0.10.0", features = ["assets", "debug"] }
+bevy_ggrs = "0.14"
+bevy_matchbox = { git="https://github.com/johanhelsing/matchbox", features = ["ggrs"] }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+bevy_ggrs = { version = "0.14", features=["wasm-bindgen"]}
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]

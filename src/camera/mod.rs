@@ -5,7 +5,7 @@ use bevy::{
 
 use std::f32::consts::PI;
 
-use crate::{player::{self, MainPlayer}, AppState};
+use crate::{player::{self, MainPlayer, Player}, AppState};
 
 pub struct ThirdPersonCameraPlugin;
 
@@ -53,6 +53,10 @@ impl Default for ThirdPersonCamera {
     }
 }
 
+#[derive(Component)]
+pub struct PlayerCamera {
+    pub player: Entity,
+}
 
 #[derive(Reflect)]
 pub struct Offset {
@@ -98,31 +102,33 @@ pub struct ThirdPersonCameraTarget;
 
 
 fn sync_player_camera(
-    player_query: Query<(&Transform, &MainPlayer), With<ThirdPersonCameraTarget>>, // query all players with an ThirdPersonCameraTarget as Component
+    player_query: Query<(&Transform, &Player), With<ThirdPersonCameraTarget>>, // query all players with an ThirdPersonCameraTarget as Component
     mut camera_query: Query<(&mut ThirdPersonCamera, &mut Transform), Without<ThirdPersonCameraTarget>>, // get all ThirdPersonCameras
 ) {
 
-    // get player transformation and camera with camera transformation. if one of them is missing, we return here
-    let Ok((player, player_details), ) = player_query.get_single() else { return };
-    let Ok((cam, mut cam_t)) = camera_query.get_single_mut() else { return };
+    for (player, player_details) in player_query.iter() {
+        if let Some(camera_entity) = player_details.camera {
+            let Ok((cam, mut cam_t)) = camera_query.get_mut(camera_entity) else { return };
 
-    // get current quat rotation from the camera
-    let rotation_matrix = Mat3::from_quat(cam_t.rotation);
+            // get current quat rotation from the camera
+            let rotation_matrix = Mat3::from_quat(cam_t.rotation);
 
-    let mut offset = Vec3::ZERO;
+            let mut offset = Vec3::ZERO;
 
-    // offset can be disabled... dont know why
-    offset = rotation_matrix.mul_vec3(Vec3::new(cam.offset.position.0, cam.offset.position.1, 0.0)); // okay, hier muss ich nochmal die blöden matrix multiplikationen durchgehen
-    // ich rechne hier: matrix * vector = offset
+            // offset can be disabled... dont know why
+            offset = rotation_matrix.mul_vec3(Vec3::new(cam.offset.position.0, cam.offset.position.1, 0.0)); // okay, hier muss ich nochmal die blöden matrix multiplikationen durchgehen
+            // ich rechne hier: matrix * vector = offset
 
-    let desired_translation =
-        cam.focus + rotation_matrix.mul_vec3(Vec3::new(0.0,0.0, cam.zoom.radius)) + offset;
-    
-    //info!("look_at: {:?}", cam.focus);
+            let desired_translation =
+                cam.focus + rotation_matrix.mul_vec3(Vec3::new(0.0,0.0, cam.zoom.radius)) + offset;
+            
+            //info!("look_at: {:?}", cam.focus);
 
-    let delta = player.translation + cam.focus;
-    cam_t.translation = desired_translation + delta;
-    //info!("cam_t.translation: {:?}", cam_t.translation);
+            let delta = player.translation + cam.focus;
+            cam_t.translation = desired_translation + delta;
+            //info!("cam_t.translation: {:?}", cam_t.translation);
+        }
+    }
 
 }
 
@@ -130,7 +136,7 @@ fn sync_player_camera(
 pub fn orbit_mouse(
     window_q: Query<&Window, With<PrimaryWindow>>,
     mut cam_q: Query<(&ThirdPersonCamera, &mut Transform), With<ThirdPersonCamera>>,
-    mouse: Res<Input<MouseButton>>,
+    //mouse: Res<Input<MouseButton>>,
     mut mouse_evr: EventReader<MouseMotion>,
 ) {
     let mut rotation = Vec2::ZERO;
@@ -169,6 +175,8 @@ pub fn orbit_mouse(
     }
 
     let rot_matrix = Mat3::from_quat(cam_transform.rotation);
+
+    // translate the player rotation to the camera point...
     cam_transform.translation =
         cam.focus + rot_matrix.mul_vec3(Vec3::new(0.0, 0.0, cam.zoom.radius));
 }

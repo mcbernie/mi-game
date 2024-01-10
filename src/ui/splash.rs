@@ -50,7 +50,7 @@ pub fn splash_setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 }
 
 
-fn update_splash(dt: Res<Time>, mut q: Query<&mut Transform, With<OnSplashScreen>>) {
+pub fn update_splash(dt: Res<Time>, mut q: Query<&mut Transform, With<OnSplashScreen>>) {
     for mut t in q.iter_mut() {
         t.rotate(Quat::from_rotation_z(dt.delta_seconds() * 0.5));
     }

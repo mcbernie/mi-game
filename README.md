@@ -17,6 +17,13 @@ This project is a documentation of my journey learning Bevy Engine. The key obje
 - Understanding the architecture and design principles of the engine.
 - Enhancing my skills in Rust and game development.
 
+## Informations
+
+using matchbox for browser gaming...
+
+cargo install matchbox_server
+matchbox_server
+
 ## Licensing
 
 In alignment with the Bevy's licensing model, this project is dual-licensed under both Apache License 2.0 and MIT License. This means that it can be used under the terms of either license, at your option. 
