@@ -34,7 +34,7 @@ enum AppState {
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(WorldInspectorPlugin::new())
+        //.add_plugins(WorldInspectorPlugin::new())
         .add_state::<AppState>()
         .add_plugins(
             ProgressPlugin::new(AppState::Splash)

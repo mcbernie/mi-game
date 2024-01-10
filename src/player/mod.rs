@@ -121,14 +121,15 @@ fn fix_character_rotation(
                             if name.as_str() == "mixamorig:Hips" {
                                 if let Some(e) = recurse("mixamorig:Head".to_string(),e, e, &custom_child_query) {
                                     command.spawn(SpotLightBundle {
-                                        transform: Transform::from_xyz(0.0, 0.0, 0.0)
-                                            .looking_at(Vec3::Z, Vec3::Y),
+                                        transform: Transform::from_xyz(0.0, 0.0, 2.0)
+                                            .looking_at(Vec3::new(0.0,0.5,10.0), Vec3::Y),
                                         spot_light: SpotLight {
-                                            intensity: 400.0, // lumens
+                                            intensity: 2400.0, // lumens
                                             color: Color::WHITE,
                                             shadows_enabled: true,
                                             inner_angle: 0.1,
-                                            outer_angle: 0.5,
+                                            outer_angle: 0.3,
+                                            range: 400.0,
                                             ..default()
                                         },
                                         ..default()
@@ -203,7 +204,6 @@ fn setup_player(
     cmd.insert(TnuaRapier3dIOBundle::default());
     cmd.insert(TnuaControllerBundle::default());
     cmd.insert(TnuaAnimatingState::<animations::AnimationState>::default());
-    cmd.insert(NoFrustumCulling);
     cmd.insert(MainPlayer);
     cmd.insert(Player::default());
     cmd.insert(ThirdPersonCameraTarget);
@@ -234,9 +234,9 @@ fn setup_player(
         //ColliderMassProperties::Density(2.0),
         //Sensor,
         //Velocity { linvel: Vec3::new(0.0, -0.5, 0.0), angvel: Vec3::new(0.0, 0.0, 0.0) },
-        //TnuaRapier3dIOBundle::default(),
-        //TnuaControllerBundle::default(),
-        //TnuaAnimatingState::<animations::AnimationState>::default(),
+        TnuaRapier3dIOBundle::default(),
+        TnuaControllerBundle::default(),
+        TnuaAnimatingState::<animations::AnimationState>::default(),
     ));
     //cmd.insert(Emitter::default());
 }
@@ -326,7 +326,7 @@ fn apply_controls(
             desired_forward: direction,
             //desired_forward: Vec3::Y,
             spring_strengh: 2000.0,
-            float_height: 0.99,
+            float_height: 1.0,
             ..Default::default()
         });
 

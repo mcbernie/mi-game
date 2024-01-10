@@ -47,8 +47,8 @@ impl Default for ThirdPersonCamera {
             zoom: Zoom::new(2.0, 3.0),
             zoom_sensitivity: 1.0,
             focus: Vec3::new(0.0, 0.3, -0.1),
-            mouse_sensitivity: 4.0,
-            snap_mouse: false,
+            mouse_sensitivity: 2.0,
+            snap_mouse: true,
         }
     }
 }

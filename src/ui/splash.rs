@@ -19,7 +19,7 @@ impl Plugin for SplashPlugin {
 #[derive(Component)]
 pub struct OnSplashScreen;
 
-fn splash_setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+pub fn splash_setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let logo = asset_server.load("logo_1.png");
     commands
         .spawn((

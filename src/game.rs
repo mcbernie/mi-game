@@ -3,7 +3,7 @@ use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_rapier3d::prelude::*;
 use iyes_progress::prelude::AssetsLoading;
 
-use crate::{camera::{ThirdPersonCameraPlugin, ThirdPersonCamera}, player::PlayerPlugin, AppState, Cubemap, map, despawn_screen, game};
+use crate::{camera::{ThirdPersonCameraPlugin, ThirdPersonCamera}, player::PlayerPlugin, AppState, Cubemap, map, despawn_screen, game, ui::splash::{splash_setup, OnSplashScreen}};
 
 pub struct GamePlugin;
 
@@ -30,11 +30,13 @@ impl Plugin for GamePlugin {
             .add_systems(
                 OnEnter(AppState::GameLoading), 
                 (
+                    splash_setup,
                     setup,
                     map::setup, 
                     despawn_screen::<Camera2d>
                 )
             )
+            .add_systems(OnExit(AppState::GameLoading), despawn_screen::<OnSplashScreen>)
             .add_systems(Update, skybox_asset_loaded.run_if(in_state(AppState::GameLoading)));
     }
 }
@@ -67,15 +69,15 @@ fn setup(
 ) {
 
     println!("enter game state: loading");
-    commands.spawn(DirectionalLightBundle {
+    commands.spawn((DirectionalLightBundle {
         directional_light: DirectionalLight {
-            illuminance: 1200.0,
+            illuminance: 500.0,
             shadows_enabled: true,
             ..default()
         },
         transform: Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_3)),
         ..default()
-    });
+    }, Name::new("GlobalLight")));
 
     // camera
     commands.spawn((
